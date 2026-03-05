@@ -1,0 +1,40 @@
+{
+  "vision": {
+    "camera_id": 0,
+    "resolution": {
+      "width": 640,
+      "height": 480
+    },
+    "fps": 30,
+    "motion_threshold": 5000,
+    "inactivity_threshold_seconds": 3600
+  },
+  "voice": {
+    "language": "or",
+    "sample_rate": 16000,
+    "chunk_duration": 1024,
+    "timeout_seconds": 10
+  },
+  "alerts": {
+    "enabled": true,
+    "caregiver_email": "caregiver@example.com",
+    "smtp_user": "system@example.com",
+    "smtp_password": "your-app-password-here",
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587
+  },
+  "reminders": {
+    "morning_medicine": "08:00",
+    "lunch": "12:30",
+    "evening_medicine": "18:00",
+    "bedtime": "21:00"
+  },
+  "database": {
+    "path": "data/elderly_care.db",
+    "log_retention_days": 90
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/system.log"
+  }
+}
