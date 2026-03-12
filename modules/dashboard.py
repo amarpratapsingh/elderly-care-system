@@ -31,6 +31,7 @@ from modules.alerts import AlertManager
 from utils import load_config
 
 logger = logging.getLogger(__name__)
+LATEST_CAMERA_FRAME_PATH = Path("data/latest_camera_frame.jpg")
 
 # Page configuration
 st.set_page_config(
@@ -698,16 +699,24 @@ def display_live_status() -> None:
         col_cam, col_stats = st.columns([3, 1])
         
         with col_cam:
-            st.image(
-                "https://via.placeholder.com/640x480/cccccc/999999?text=Camera+Feed",
-                caption="Live Camera Feed - Coming Soon",
-                use_container_width=True
-            )
+            if LATEST_CAMERA_FRAME_PATH.exists():
+                frame_updated_at = datetime.fromtimestamp(LATEST_CAMERA_FRAME_PATH.stat().st_mtime)
+                st.image(
+                    str(LATEST_CAMERA_FRAME_PATH),
+                    caption=f"Live Camera Feed (updated {frame_updated_at.strftime('%Y-%m-%d %H:%M:%S')})",
+                    use_column_width=True,
+                )
+            else:
+                st.info(
+                    "No live frame yet. Start `python main.py` and wait a few seconds for camera frames."
+                )
         
         with col_stats:
             st.metric("Frame Rate", "15 FPS", delta="🟢 stable")
             st.metric("Resolution", "640x480", delta="HD")
-            st.metric("Status", "🟢 Active", delta="ready")
+            camera_status = "🟢 Active" if LATEST_CAMERA_FRAME_PATH.exists() else "🟡 Waiting"
+            camera_delta = "receiving frames" if LATEST_CAMERA_FRAME_PATH.exists() else "run main.py"
+            st.metric("Status", camera_status, delta=camera_delta)
 
 
 # ============================================================================
@@ -1223,4 +1232,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
