@@ -139,7 +139,7 @@ class ElderlyCareSystem:
         alerts_cfg = self.config.get("alerts", {})
         self.alert_manager = AlertManager(
             caregiver_email=alerts_cfg.get("caregiver_email", "caregiver@example.com"),
-            smtp_user=alerts_cfg.get("smtp_user", alerts_cfg.get("smtp_username", "")),
+            smtp_user=alerts_cfg.get("smtp_username") or alerts_cfg.get("smtp_user", ""),
             smtp_pass=alerts_cfg.get("smtp_password", ""),
             smtp_server=alerts_cfg.get("smtp_server", "smtp.gmail.com"),
             smtp_port=int(alerts_cfg.get("smtp_port", 587)),

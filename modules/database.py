@@ -5,9 +5,9 @@ Handles all database operations for activity and alert logging.
 
 import sqlite3
 import logging
-from typing import List, Dict, Optional
+from types import TracebackType
+from typing import List, Dict, Optional, Type
 from pathlib import Path
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +31,17 @@ class Database:
         self.db_path = Path(db_path)
         self.connection: Optional[sqlite3.Connection] = None
 
-    def __enter__(self):
+    def __enter__(self) -> "Database":
         """Context manager entry."""
         self.connect()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """Context manager exit."""
         self.close()
 
@@ -221,35 +226,71 @@ class Database:
             logger.error(f"Error logging voice interaction: {e}")
             return None
 
-    def get_recent_logs(self, table: str, limit: int = 10) -> List[Dict]:
+    # Friendly aliases: dashboard uses short names, DB uses longer canonical names.
+    _TABLE_ALIASES: Dict[str, str] = {
+        "activities": "activity_logs",
+        "voice_commands": "voice_logs",
+    }
+
+    def get_recent_logs(
+        self,
+        table: str,
+        limit: int = 10,
+        hours: Optional[int] = None,
+    ) -> List[Dict]:
         """
         Get recent logs from a specific table.
-        
+
         Args:
-            table: Table name ('activity_logs', 'alerts', 'voice_logs', 'reminders')
-            limit: Maximum number of records to return (default: 10)
-            
+            table: Table name or alias.
+                   Canonical names: 'activity_logs', 'alerts', 'voice_logs', 'reminders'.
+                   Accepted aliases: 'activities' -> 'activity_logs',
+                                     'voice_commands' -> 'voice_logs'.
+            limit: Maximum number of records to return (default: 10).
+            hours: When provided, only return records from the last *hours* hours.
+
         Returns:
             List of log records as dictionaries
         """
         try:
+            # Resolve alias to canonical table name
+            canonical = self._TABLE_ALIASES.get(table, table)
+
             valid_tables = ["activity_logs", "alerts", "voice_logs", "reminders"]
-            if table not in valid_tables:
-                logger.warning(f"Invalid table: {table}. Valid tables: {valid_tables}")
+            if canonical not in valid_tables:
+                logger.warning(
+                    f"Invalid table: '{table}'. Valid tables/aliases: "
+                    f"{valid_tables + list(self._TABLE_ALIASES)}"
+                )
                 return []
-            
+
             cursor = self.connection.cursor()
-            cursor.execute(f"""
-                SELECT * FROM {table}
-                ORDER BY created_at DESC, id DESC
-                LIMIT ?
-            """, (limit,))
-            
+
+            if hours is not None:
+                cursor.execute(
+                    f"""
+                    SELECT * FROM {canonical}
+                    WHERE timestamp >= datetime('now', '-{int(hours)} hours')
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    SELECT * FROM {canonical}
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+
             rows = cursor.fetchall()
             records = [dict(row) for row in rows]
-            logger.debug(f"Retrieved {len(records)} records from {table}")
+            logger.debug(f"Retrieved {len(records)} records from {canonical}")
             return records
-            
+
         except Exception as e:
             logger.error(f"Error retrieving logs from {table}: {e}")
             return []
