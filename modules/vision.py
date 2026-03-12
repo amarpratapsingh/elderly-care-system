@@ -8,9 +8,8 @@ import numpy as np
 import threading
 import logging
 import time
-from typing import Optional, Tuple, Dict, Callable
-from pathlib import Path
-from datetime import datetime, timedelta
+from types import TracebackType
+from typing import Optional, Tuple, Dict, Callable, Any, Type
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +52,17 @@ class CameraHandler:
             f"resolution={width}x{height}"
         )
     
-    def __enter__(self):
+    def __enter__(self) -> "CameraHandler":
         """Context manager entry - opens camera."""
         self.start()
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """Context manager exit - releases camera."""
         self.release()
     
@@ -150,7 +154,7 @@ class CameraHandler:
         except Exception as e:
             logger.error(f"Error releasing camera {self.camera_id}: {e}")
     
-    def get_properties(self) -> Dict[str, any]:
+    def get_properties(self) -> Dict[str, Any]:
         """
         Get current camera properties.
         

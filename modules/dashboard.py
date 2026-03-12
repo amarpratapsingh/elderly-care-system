@@ -16,14 +16,12 @@ import sys
 import logging
 from pathlib import Path
 from datetime import datetime, timedelta
-import csv
-import io
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import json
+from typing import Any, Dict
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -136,7 +134,7 @@ st.markdown("""
 # Session State & Caching Functions
 # ============================================================================
 
-def initialize_session_state():
+def initialize_session_state() -> None:
     """Initialize session state variables."""
     if "config" not in st.session_state:
         st.session_state.config = load_config()
@@ -155,19 +153,19 @@ def initialize_session_state():
         st.session_state.emergency_sent = False
 
 
-def get_config():
+def get_config() -> Dict[str, Any]:
     """Get configuration from session state."""
     initialize_session_state()
     return st.session_state.config
 
 
-def get_db():
+def get_db() -> Database:
     """Get database connection from session state."""
     initialize_session_state()
     return st.session_state.db
 
 
-def get_runtime_system_state() -> dict:
+def get_runtime_system_state() -> Dict[str, str]:
     """Read runtime state emitted by main system process."""
     state_file = Path("data/system_state.json")
     if not state_file.exists():
@@ -195,7 +193,7 @@ def get_runtime_system_state() -> dict:
 # Sidebar Functions
 # ============================================================================
 
-def display_sidebar():
+def display_sidebar() -> None:
     """Display sidebar with system status and navigation."""
     st.sidebar.title("👴 System Control Panel")
     st.sidebar.markdown("---")
@@ -233,9 +231,6 @@ def display_sidebar():
     db = get_db()
     
     try:
-        # Get today's stats
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        
         # Count alerts today
         recent_alerts = db.get_recent_logs("alerts", limit=1000, hours=24)
         alerts_today = len([a for a in recent_alerts if a]) if recent_alerts else 0
@@ -280,7 +275,7 @@ def display_sidebar():
 # Control Panel Functions
 # ============================================================================
 
-def display_control_panel():
+def display_control_panel() -> None:
     """Display system control panel in sidebar."""
     st.sidebar.markdown("---")
     st.sidebar.subheader("🎛️ Control Panel")
@@ -339,7 +334,7 @@ def display_control_panel():
                     alerts_config = config.get("alerts", {})
                     alert_manager = AlertManager(
                         caregiver_email=alerts_config.get("caregiver_email", ""),
-                        smtp_user=alerts_config.get("smtp_username", ""),
+                        smtp_user=alerts_config.get("smtp_username") or alerts_config.get("smtp_user", ""),
                         smtp_pass=alerts_config.get("smtp_password", ""),
                         smtp_server=alerts_config.get("smtp_server", "smtp.gmail.com"),
                         smtp_port=int(alerts_config.get("smtp_port", 587)),
@@ -442,7 +437,7 @@ def display_control_panel():
             st.sidebar.error(f"❌ Error: {e}")
 
 
-def display_config_editor_modal():
+def display_config_editor_modal() -> None:
     """Display configuration editor modal."""
     if not st.session_state.get("show_config_editor", False):
         return
@@ -529,7 +524,7 @@ SEVERITY_EMOJIS = {
 # Live Status Tab
 # ============================================================================
 
-def display_live_status():
+def display_live_status() -> None:
     """Display live status tab with real-time metrics and emergency button."""
     st.header("📊 Live Status")
     
@@ -550,7 +545,7 @@ def display_live_status():
                     alerts_config = config.get("alerts", {})
                     alert_manager = AlertManager(
                         caregiver_email=alerts_config.get("caregiver_email", ""),
-                        smtp_user=alerts_config.get("smtp_username", ""),
+                        smtp_user=alerts_config.get("smtp_username") or alerts_config.get("smtp_user", ""),
                         smtp_pass=alerts_config.get("smtp_password", ""),
                         smtp_server=alerts_config.get("smtp_server", "smtp.gmail.com"),
                         smtp_port=int(alerts_config.get("smtp_port", 587)),
@@ -728,7 +723,7 @@ def display_live_status():
 # Activity History Tab
 # ============================================================================
 
-def display_activity_history():
+def display_activity_history() -> None:
     """Display activity history with tables and charts."""
     st.header("📋 Activity History")
     
@@ -848,7 +843,7 @@ def display_activity_history():
 # Alerts Tab
 # ============================================================================
 
-def display_alerts_tab():
+def display_alerts_tab() -> None:
     """Display alerts with sorting and severity filtering."""
     st.header("🚨 Alerts")
     
@@ -1033,7 +1028,7 @@ def display_alerts_tab():
 # Voice Logs Tab
 # ============================================================================
 
-def display_voice_logs():
+def display_voice_logs() -> None:
     """Display voice interactions with intent filtering."""
     st.header("🎤 Voice Logs")
     
@@ -1163,7 +1158,7 @@ def display_voice_logs():
 # Auto-Refresh Logic
 # ============================================================================
 
-def setup_auto_refresh():
+def setup_auto_refresh() -> None:
     """Setup auto-refresh with st.empty() and placeholder updates."""
     col1, col2 = st.columns([4, 1])
     
@@ -1184,7 +1179,7 @@ def setup_auto_refresh():
 # Main Application
 # ============================================================================
 
-def main():
+def main() -> None:
     """Main dashboard application."""
     # Initialize session state
     initialize_session_state()

@@ -17,6 +17,9 @@ DEFAULT_LOG_DIR = Path("logs")
 DEFAULT_LOG_FILE = DEFAULT_LOG_DIR / "system.log"
 
 
+logger = logging.getLogger(__name__)
+
+
 def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> Dict[str, Any]:
     """
     Load configuration from JSON file.
@@ -39,18 +42,18 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> Dict[str, Any]:
         
         with open(config_file, 'r', encoding='utf-8') as f:
             config = json.load(f)
-        
-        print(f"✓ Configuration loaded from {config_path}")
+
+        logger.info("Configuration loaded from %s", config_path)
         return config
         
     except FileNotFoundError as e:
-        print(f"✗ Error: {e}")
+        logger.error("Config file error: %s", e)
         raise
     except json.JSONDecodeError as e:
-        print(f"✗ Error: Invalid JSON in {config_path}: {e}")
+        logger.error("Invalid JSON in %s: %s", config_path, e)
         raise
     except Exception as e:
-        print(f"✗ Unexpected error loading config: {e}")
+        logger.error("Unexpected error loading config: %s", e)
         raise
 
 
@@ -71,12 +74,12 @@ def save_config(config: Dict[str, Any], config_path: str = DEFAULT_CONFIG_PATH) 
         
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2)
-        
-        print(f"✓ Configuration saved to {config_path}")
+
+        logger.info("Configuration saved to %s", config_path)
         return True
         
     except Exception as e:
-        print(f"✗ Error saving config: {e}")
+        logger.error("Error saving config to %s: %s", config_path, e)
         return False
 
 
@@ -140,7 +143,8 @@ def setup_logging(
         return logger
         
     except Exception as e:
-        print(f"✗ Error setting up logging: {e}")
+        logger = logging.getLogger(__name__)
+        logger.error("Error setting up logging: %s", e)
         # Return basic logger if setup fails
         return logging.getLogger()
 
@@ -204,6 +208,11 @@ def seconds_to_hms(seconds: int) -> str:
     return " ".join(parts)
 
 
+def format_time(seconds: int) -> str:
+    """Return human-readable duration string from seconds."""
+    return seconds_to_hms(seconds)
+
+
 def setup_data_directories() -> bool:
     """
     Create required data directories.
@@ -220,12 +229,12 @@ def setup_data_directories() -> bool:
         
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
-        
-        print(f"✓ Data directories initialized")
+
+        logger.info("Data directories initialized")
         return True
         
     except Exception as e:
-        print(f"✗ Error creating data directories: {e}")
+        logger.error("Error creating data directories: %s", e)
         return False
 
 
@@ -243,34 +252,34 @@ def validate_config(config: Dict[str, Any]) -> bool:
     
     for section in required_sections:
         if section not in config:
-            print(f"✗ Missing config section: {section}")
+            logger.error("Missing config section: %s", section)
             return False
     
     # Validate vision section
     vision = config.get("vision", {})
     if "camera_id" not in vision:
-        print("✗ Missing vision.camera_id")
+        logger.error("Missing vision.camera_id")
         return False
     
     # Validate voice section
     voice = config.get("voice", {})
     if "language" not in voice:
-        print("✗ Missing voice.language")
+        logger.error("Missing voice.language")
         return False
     
     # Validate alerts section
     alerts = config.get("alerts", {})
     if "caregiver_email" not in alerts:
-        print("✗ Missing alerts.caregiver_email")
+        logger.error("Missing alerts.caregiver_email")
         return False
     
     # Validate reminders section
     reminders = config.get("reminders", {})
     if not reminders:
-        print("✗ Empty reminders section")
+        logger.error("Empty reminders section")
         return False
-    
-    print("✓ Configuration validated successfully")
+
+    logger.info("Configuration validated successfully")
     return True
 
 
@@ -295,7 +304,7 @@ def get_system_info() -> Dict[str, Any]:
         return info
         
     except Exception as e:
-        print(f"✗ Error getting system info: {e}")
+        logger.error("Error getting system info: %s", e)
         return {}
 
 
@@ -361,7 +370,7 @@ def create_backup(file_path: str) -> Optional[str]:
         return str(backup_path)
         
     except Exception as e:
-        print(f"✗ Error creating backup: {e}")
+        logger.error("Error creating backup for %s: %s", file_path, e)
         return None
 
 

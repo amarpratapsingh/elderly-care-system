@@ -1,167 +1,197 @@
-# Elderly Care Monitoring System
+# Elderly Care AI System
 
-A comprehensive AI-powered monitoring system designed to ensure the safety and well-being of elderly individuals through continuous motion detection, voice interaction, automated alerts, and medication reminders.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
+![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
+![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B)
+![Database](https://img.shields.io/badge/DB-SQLite-003B57)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+
+AI-assisted elderly safety monitoring system with computer vision, voice interaction, reminder scheduling, caregiver alerts, and a Streamlit dashboard.
 
 ## Features
 
-- **Motion Detection**: Real-time video monitoring with inactivity alerts
-- **Voice Assistant**: Natural language voice commands and responses in local language (Odia)
-- **Activity Logging**: SQLite database for tracking all activities and alerts
-- **Alert System**: Automated email notifications to caregivers
-- **Medication Reminders**: Scheduled reminders for medications and meals
-- **Caregiver Dashboard**: Streamlit web interface for monitoring status and logs
-- **Adaptive Alerts**: Configurable thresholds for motion and inactivity
-
-## System Requirements
-
-- Python 3.8+
-- Webcam or USB camera
-- Microphone for voice commands
-- Internet connection (for email alerts and voice synthesis)
-- OpenAI API key (for advanced voice processing)
+- 🎥 **Real-time vision monitoring** with motion detection and inactivity tracking
+- 🎙️ **Voice assistant workflow** for listening, intent processing, and spoken responses
+- 🚨 **Caregiver alerting** via SMTP email (test, inactivity, emergency)
+- ⏰ **Medication/reminder scheduler** with daily and one-time jobs
+- 🗄️ **SQLite logging layer** for activities, alerts, voice logs, and reminders
+- 📊 **Streamlit dashboard** for live status, history, and alert operations
+- ⚙️ **Config-driven behavior** using a single `config.json`
+- 🛡️ **Graceful shutdown behavior** and resilient runtime state handling
 
 ## Installation
 
-1. Clone the repository:
+1. **Clone repository**
+
 ```bash
-git clone <repository-url>
+git clone <your-repo-url>
 cd elderly-care-system
 ```
 
-2. Create a virtual environment:
+2. **Create and activate virtual environment**
+
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-3. Install dependencies:
+3. **Install dependencies**
+
 ```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-4. Configure the system:
-- Edit `config.json` with your settings
-- Set up email credentials in alerts section
-- Configure camera and audio parameters
+4. **Prepare data folders** (optional, auto-created by app)
 
-5. Run the system:
 ```bash
-python main.py
+mkdir -p data logs data/audio
 ```
 
-6. Access the dashboard:
-```bash
-streamlit run modules/dashboard.py
-```
+5. **Set email credentials** in `config.json` (or environment/secrets for deployment)
 
 ## Configuration
 
-Edit `config.json` to customize:
-- **Vision**: Camera ID, resolution, motion thresholds
-- **Voice**: Language, audio sample rate
-- **Alerts**: Email settings for notifications
-- **Reminders**: Medicine and meal times
+All runtime behavior is controlled from `config.json`.
 
-## Project Structure
+- `system`
+    - `name`: Display/system name
+    - `log_level`: Log verbosity (e.g., `INFO`, `DEBUG`)
 
-```
-elderly-care-system/
-├── README.md
-├── requirements.txt
-├── config.json
-├── .gitignore
-├── main.py
-├── utils.py
-├── modules/
-│   ├── __init__.py
-│   ├── vision.py
-│   ├── voice.py
-│   ├── database.py
-│   ├── alerts.py
-│   ├── scheduler.py
-│   └── dashboard.py
-└── data/
-    └── elderly_care.db
-```
+- `vision`
+    - `camera_id`: Camera index (usually `0`)
+    - `width`, `height`: Capture resolution
+    - `fps`: Target display/update FPS
+    - `motion_threshold`: Pixel-delta threshold for motion
+    - `min_contour_area`: Contour area cutoff for true motion
+    - `inactivity_threshold_seconds`: Seconds before inactivity state
+    - `roi_enabled`: Optional ROI toggle
 
-## Dependencies
+- `voice`
+    - `language`: Primary speech language (e.g., `or`)
+    - `fallback_language`: Secondary language
+    - `sample_rate`: Audio sample rate
+    - `chunk_duration`: Capture chunk duration
+    - `stt_engine`: STT engine mode (`google`, etc.)
 
-See `requirements.txt` for complete list. Key packages:
-- OpenCV (vision processing)
-- NumPy (numerical operations)
-- PyAudio (audio input)
-- SpeechRecognition (voice commands)
-- Streamlit (web dashboard)
-- Schedule (reminder scheduling)
+- `alerts`
+    - `caregiver_email`: Destination recipient
+    - `smtp_server`, `smtp_port`: SMTP host/port
+    - `smtp_username`: SMTP login username
+    - `smtp_password`: SMTP password/app password
+    - `inactivity_warning_seconds`: Warning threshold
+    - `inactivity_critical_seconds`: Critical threshold
+
+- `reminders`
+    - Any reminder key with:
+        - `time`: `HH:MM`
+        - `message`: Spoken reminder text
+
+- `database`
+    - `path`: SQLite DB location (default `data/elderly_care.db`)
 
 ## Usage
 
-### Starting the monitoring system:
+### Run core monitoring service
+
 ```bash
 python main.py
 ```
 
-### Accessing the dashboard:
+### Run dashboard
+
 ```bash
 streamlit run modules/dashboard.py
 ```
 
-### Voice Commands:
-- "Hello" - Greet the system
-- "Reminder" - Check upcoming reminders
-- "Help" - Get assistance
+### Recommended local workflow
 
-## Logging
+Open two terminals:
 
-All activities are logged in SQLite database (`data/elderly_care.db`). Logs include:
-- Motion detection events
-- Voice commands
-- Alert triggers
-- Reminder confirmations
+- Terminal 1: `python main.py`
+- Terminal 2: `streamlit run modules/dashboard.py`
 
-## Email Alerts
+## Project Structure
 
-The system sends automated email alerts when:
-- Inactivity is detected beyond configured threshold
-- Emergency commands are issued
-- Medication reminders are triggered
-
-## Safety Notes
-
-- Ensure proper internet connection for alert delivery
-- Configure email with app-specific passwords (not main password)
-- Test alerts before deploying to production
-- Regularly backup the database
+```text
+elderly-care-system/
+├── config.json
+├── main.py
+├── README.md
+├── requirements.txt
+├── utils.py
+├── modules/
+│   ├── __init__.py
+│   ├── alerts.py
+│   ├── dashboard.py
+│   ├── database.py
+│   ├── scheduler.py
+│   ├── vision.py
+│   └── voice.py
+├── data/
+│   └── elderly_care.db
+├── logs/
+└── test_*.py
+```
 
 ## Troubleshooting
 
-### Camera not detected:
-- Verify camera is connected
-- Check `camera_id` in config.json (try 0, 1, 2)
-- Run: `python -c "import cv2; print(cv2.getBuildInfo())"`
+### 1) Streamlit warning: `use_column_width` deprecated
 
-### Audio not working:
-- Verify microphone is connected
-- Test with: `python -c "import pyaudio; print(pyaudio.PyAudio().get_device_count())"`
-- Check microphone permissions
+- Cause: Streamlit API update
+- Fix: replace `use_column_width=True` with `use_container_width=True`
 
-### Email alerts not sending:
-- Verify SMTP credentials in config.json
-- Use app-specific password for Gmail
-- Check firewall/antivirus blocking SMTP
+### 2) Camera not opening
 
-## Support
+- Verify webcam is connected and free
+- Try changing `vision.camera_id` (`0`, `1`, `2`)
+- Test separately:
 
-For issues or feature requests, please contact the development team.
+```bash
+python test_camera.py
+```
+
+### 3) Microphone initialization fails
+
+- Check OS microphone permission
+- Ensure required audio libs are installed
+- Test voice capture separately:
+
+```bash
+python test_stt.py
+```
+
+### 4) Email alerts fail
+
+- Confirm `alerts.smtp_username`, `alerts.smtp_password`, `alerts.caregiver_email`
+- For Gmail, use app password (not account password)
+- Verify SMTP host/port and firewall rules
+
+### 5) Dashboard shows “Coming Soon” for camera feed
+
+- Dashboard launched correctly, but that section is currently placeholder UI
+- Live OpenCV windows are available via test scripts, not full embedded stream
+
+## Demo
+
+Add your media under `docs/demo/` and reference it here.
+
+- Dashboard screenshot:
+
+```markdown
+![Dashboard](docs/demo/dashboard.png)
+```
+
+- Optional animated demo:
+
+```markdown
+![Demo GIF](docs/demo/demo.gif)
+```
+
+> Tip: Keep GIF size small (<10 MB) for fast loading on GitHub.
 
 ## License
 
-MIT License - See LICENSE file for details
+This project is licensed under the MIT License.
 
-## Authors
-
-Development Team - Elderly Care Solutions
-
-## Version
-
-1.0.0 - Initial Release
+If you add a `LICENSE` file, keep this section aligned with that file.

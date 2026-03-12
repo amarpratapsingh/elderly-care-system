@@ -1,112 +1,19 @@
-import speech_recognition as sr
-import re
-from gtts import gTTS
-import pygame
-import time
-import os
-
-class SpeechRecognizer:
-    def __init__(self, language='or-IN', engine='google'):
-        self.language = language
-        self.engine = engine
-        self.r = sr.Recognizer()
-
-    def transcribe(self, audio_file):
-        with sr.AudioFile(audio_file) as source:
-            audio = self.r.record(source)
-        try:
-            if self.engine == 'whisper':
-                # Whisper transcription (requires whisper library)
-                # This is a placeholder, as actual implementation might vary
-                return self.r.recognize_whisper(audio, language='odia').lower(), 1.0
-            else:
-                # Google Speech Recognition
-                result = self.r.recognize_google(audio, language=self.language, show_all=True)
-                if result and 'alternative' in result:
-                    top_alternative = result['alternative'][0]
-                    return top_alternative['transcript'].lower(), top_alternative.get('confidence', 0.9)
-                else:
-                    return self.r.recognize_google(audio, language='en-IN', show_all=True)['alternative'][0]['transcript'].lower(), 0.5
-        except sr.UnknownValueError:
-            return None, 0.0
-        except sr.RequestError as e:
-            print(f"Could not request results from Google Speech Recognition service; {e}")
-            return None, 0.0
-
-    def transcribe_from_mic(self, duration=3):
-        with sr.Microphone() as source:
-            print("Speak now...")
-            audio = self.r.listen(source, phrase_time_limit=duration)
-        
-        # Save the recorded audio to a file for debugging
-        with open("mic_recording.wav", "wb") as f:
-            f.write(audio.get_wav_data())
-
-        return self.transcribe("mic_recording.wav")
-
-    def set_language(self, lang_code):
-        self.language = lang_code
-
-class IntentClassifier:
-    def __init__(self):
-        self.intents = {
-            'emergency': ['help', 'sos', 'emergency', 'ସାହାଯ୍ୟ', 'ଡାକ୍ତର'],
-            'medicine_query': ['medicine', 'pill', 'drug', 'ଔଷଧ', 'ଟାବଲେଟ'],
-            'greeting': ['hello', 'hi', 'ନମସ୍କାର', 'ସୁପ୍ରଭାତ'],
-            'acknowledge': ['yes', 'done', 'okay', 'ହଁ', 'ଠିକ୍ ଅଛି']
-        }
-
-    def classify(self, text: str):
-        text = text.lower()
-        for intent, keywords in self.intents.items():
-            for keyword in keywords:
-                if re.search(r'\b' + keyword + r'\b', text):
-                    return intent, 1.0, {}
-        return 'unknown', 0.0, {}
-
-class TTSEngine:
-    def __init__(self, language='or'):
-        self.language = language
-        pygame.mixer.init()
-
-    def speak(self, text: str, save_path=None):
-        if not text:
-            print("Error: No text to speak.")
-            return
-        try:
-            tts = gTTS(text=text, lang=self.language, slow=False)
-            if save_path:
-                tts.save(save_path)
-                pygame.mixer.music.load(save_path)
-                pygame.mixer.music.play()
-                while pygame.mixer.music.get_busy():
-                    time.sleep(0.1)
-            else:
-                tts.save("response.mp3")
-                pygame.mixer.music.load("response.mp3")
-                pygame.mixer.music.play()
-                while pygame.mixer.music.get_busy():
-                    time.sleep(0.1)
-                os.remove("response.mp3")
-        except Exception as e:
-            print(f"Error in TTS: {e}")
-
 """
 Voice Module - Voice Assistant and Speech Processing
 Handles voice input, speech recognition, and text-to-speech responses.
 """
 
-import speech_recognition as sr
-from gtts import gTTS
-import pygame
 import logging
-import threading
-from typing import Optional, Dict, Callable
-from pathlib import Path
 import re
+import threading
 import wave
+from pathlib import Path
+from typing import Callable, Dict, Optional, Any
 
 import numpy as np
+import pygame
+import speech_recognition as sr
+from gtts import gTTS
 
 try:
     import sounddevice as sd
@@ -114,6 +21,7 @@ except ImportError:  # pragma: no cover - depends on runtime environment
     sd = None
 
 logger = logging.getLogger(__name__)
+
 
 class AudioHandler:
     """
@@ -238,6 +146,7 @@ class AudioHandler:
         except Exception as e:
             raise RuntimeError(f"Failed to play audio '{filename}': {e}") from e
 
+
 class VoiceAssistant:
     """
     Voice assistant for handling voice commands and responses.
@@ -331,7 +240,7 @@ class VoiceAssistant:
         finally:
             self.is_listening = False
 
-    def process_intent(self, text: str) -> Dict[str, any]:
+    def process_intent(self, text: str) -> Dict[str, Any]:
         """
         Process spoken text and extract intent.
         
@@ -344,34 +253,57 @@ class VoiceAssistant:
         try:
             text_lower = text.lower().strip()
             
-            # Define intent patterns
-            intents = {
+            # Intent patterns: ASCII tokens use regex; Odia/Unicode tokens use
+            # plain substring checks to avoid unreliable \b word-boundary
+            # behaviour on non-ASCII scripts.
+            intents: Dict[str, list[str]] = {
                 "greeting": [
                     r"hello", r"hi", r"hey", r"namaste",
-                    r"how are you", r"good morning", r"good afternoon"
+                    r"how are you", r"good morning", r"good afternoon",
+                    # Odia tokens (plain substrings, not regex)
+                    "ନମସ୍କାର", "ସୁପ୍ରଭାତ",
                 ],
                 "reminder": [
                     r"reminder", r"remind me", r"what\'?s next",
-                    r"upcoming", r"next meeting", r"medication"
+                    r"upcoming", r"next meeting", r"medication",
+                    "ଔଷଧ", "ଟାବଲେଟ",
                 ],
                 "help": [
                     r"help", r"assist", r"support", r"what can you do",
-                    r"instructions", r"guidance"
+                    r"instructions", r"guidance",
                 ],
                 "status": [
-                    r"status", r"how am i", r"am i?.*well", r"check me"
+                    r"status", r"how am i", r"am i?.*well", r"check me",
+                    "ଅବସ୍ଥା",
                 ],
                 "emergency": [
-                    r"emergency", r"danger", r"help", r"sos", r"urgent",
-                    r"call.*help", r"doctor"
+                    r"emergency", r"danger", r"sos", r"urgent",
+                    r"call.*help", r"doctor",
+                    # Odia tokens
+                    "ସାହାଯ୍ୟ", "ଡାକ୍ତର",
+                ],
+                "stop": [
+                    r"stop", r"cancel", r"done", r"okay",
+                    "ବନ୍ଦ", "ଠିକ୍ ଅଛି", "ହଁ",
+                ],
+                "medicine_query": [
+                    r"medicine", r"pill", r"drug", r"medicine time",
+                    "ଔଷଧ", "ଟାବଲେଟ",
                 ],
             }
-            
+
+            def _matches(pattern: str, text: str) -> bool:
+                """Match a single pattern: plain substring for Unicode, regex for ASCII."""
+                if re.search(r'[^\x00-\x7F]', pattern):
+                    # Non-ASCII (e.g. Odia) — use plain substring match
+                    return pattern in text
+                return re.search(pattern, text) is not None
+
             # Match intents
             matched_intent = None
             for intent, patterns in intents.items():
                 for pattern in patterns:
-                    if re.search(pattern, text_lower):
+                    if _matches(pattern, text_lower):
                         matched_intent = intent
                         break
                 if matched_intent:
@@ -440,7 +372,7 @@ class VoiceAssistant:
         self.intent_callbacks[intent] = callback
         logger.info(f"Registered handler for intent: {intent}")
 
-    def handle_intent(self, intent_result: Dict) -> any:
+    def handle_intent(self, intent_result: Dict[str, Any]) -> Any:
         """
         Execute handler for detected intent.
         
@@ -498,7 +430,7 @@ class VoiceAssistant:
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 
-    def get_status(self) -> Dict[str, any]:
+    def get_status(self) -> Dict[str, Any]:
         """
         Get current voice assistant status.
         

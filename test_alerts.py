@@ -95,7 +95,7 @@ def get_smtp_credentials() -> dict:
     # Build credentials dictionary
     credentials = {
         "caregiver_email": smtp_config.get("caregiver_email", ""),
-        "smtp_user": smtp_config.get("smtp_user", ""),
+        "smtp_user": smtp_config.get("smtp_username") or smtp_config.get("smtp_user", ""),
         "smtp_pass": smtp_pass or "",
         "smtp_server": smtp_config.get("smtp_server", "smtp.gmail.com"),
         "smtp_port": int(smtp_config.get("smtp_port", 587)),
