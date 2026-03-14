@@ -27,6 +27,7 @@ import sqlite3
 from utils import load_config
 
 logger = logging.getLogger(__name__)
+LATEST_CAMERA_FRAME_PATH = Path("data/latest_camera_frame.jpg")
 
 WEB_DIR = ROOT_DIR / "web"
 DATA_DIR = ROOT_DIR / "data"
@@ -371,4 +372,4 @@ def run_dashboard_server(host: str = "0.0.0.0", port: int = 8080) -> None:
 
 
 if __name__ == "__main__":
-    run_dashboard_server()
+    main()

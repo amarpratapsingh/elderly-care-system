@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 import json
+import cv2
 from enum import Enum
 from datetime import datetime
 from pathlib import Path
@@ -79,6 +80,7 @@ class ElderlyCareSystem:
         self._db_available = True
         self._db_fallback_file = Path("logs/database_fallback.log")
         self._camera_available = True
+        self._latest_frame_path = Path("data/latest_camera_frame.jpg")
         self._voice_available = True
         self._offline_stt_mode = False
         self._stt_none_count = 0
@@ -635,6 +637,11 @@ class ElderlyCareSystem:
             if current_frame is None:
                 time.sleep(0.1)
                 continue
+
+            try:
+                cv2.imwrite(str(self._latest_frame_path), current_frame)
+            except Exception as e:
+                logger.debug("Failed to update latest camera frame: %s", e)
 
             motion_detected, _confidence = self.motion_detector.detect(previous_frame, current_frame)
             self.activity_tracker.update(motion_detected)
