@@ -324,8 +324,8 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/emergency":
             payload = self.service.trigger_emergency_alert()
-            status = HTTPStatus.OK if payload.get("ok") else HTTPStatus.INTERNAL_SERVER_ERROR
-            return self._send_json(payload, status=status)
+            # Always return JSON with 200 so frontend can render partial success details.
+            return self._send_json(payload, status=HTTPStatus.OK)
 
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
