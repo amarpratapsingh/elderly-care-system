@@ -101,7 +101,7 @@ python main.py
 ### Run dashboard
 
 ```bash
-streamlit run modules/dashboard.py
+python modules/dashboard.py
 ```
 
 ### Recommended local workflow
@@ -109,7 +109,7 @@ streamlit run modules/dashboard.py
 Open two terminals:
 
 - Terminal 1: `python main.py`
-- Terminal 2: `streamlit run modules/dashboard.py`
+- Terminal 2: `python modules/dashboard.py`
 
 ## Project Structure
 

@@ -4,7 +4,7 @@ Run with:
     python modules/dashboard.py
 
 Then open:
-    http://localhost:8080
+    http://localhost:<printed-port>
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import time
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,6 +26,7 @@ sys.path.insert(0, str(ROOT_DIR))
 import sqlite3
 
 from utils import load_config
+from modules.alerts import AlertManager
 
 logger = logging.getLogger(__name__)
 LATEST_CAMERA_FRAME_PATH = Path("data/latest_camera_frame.jpg")
@@ -46,7 +48,32 @@ class DashboardService:
     def __init__(self) -> None:
         self.config = load_config()
         self.db_path = Path(self.config.get("database", {}).get("path", "data/elderly_care.db"))
+        self.alert_manager = self._build_alert_manager()
         self._ensure_schema()
+
+    def _build_alert_manager(self) -> AlertManager | None:
+        """Build AlertManager from config when SMTP settings are available."""
+        alerts_cfg = self.config.get("alerts", {})
+        caregiver_email = str(alerts_cfg.get("caregiver_email", "")).strip()
+        smtp_user = str(alerts_cfg.get("smtp_username") or alerts_cfg.get("smtp_user", "")).strip()
+        smtp_pass = str(alerts_cfg.get("smtp_password", "")).strip()
+
+        if not caregiver_email or not smtp_user or not smtp_pass:
+            logger.warning("Dashboard emergency email disabled: SMTP credentials not configured")
+            return None
+
+        try:
+            return AlertManager(
+                caregiver_email=caregiver_email,
+                smtp_user=smtp_user,
+                smtp_pass=smtp_pass,
+                smtp_server=str(alerts_cfg.get("smtp_server", "smtp.gmail.com")),
+                smtp_port=int(alerts_cfg.get("smtp_port", 587)),
+                database=None,
+            )
+        except Exception as exc:
+            logger.error("Failed to initialize dashboard AlertManager: %s", exc)
+            return None
 
     def _ensure_schema(self) -> None:
         if not self.db_path.parent.exists():
@@ -229,24 +256,45 @@ class DashboardService:
             return {
                 "available": False,
                 "updated_at": None,
-                "url": "/camera-frame",
+                "url": "/camera-stream",
             }
 
         updated_at = datetime.fromtimestamp(LATEST_CAMERA_FRAME_PATH.stat().st_mtime).isoformat()
         return {
             "available": True,
             "updated_at": updated_at,
-            "url": "/camera-frame",
+            "url": "/camera-stream",
         }
 
     def trigger_emergency_alert(self) -> Dict[str, Any]:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message = f"Emergency alert triggered manually from dashboard at {timestamp}."
         alert_id = self._insert_alert("emergency_manual", "critical", message)
+        email_sent = False
+        email_error = ""
+
+        if self.alert_manager is None:
+            email_error = "SMTP credentials not configured in config.json"
+        else:
+            try:
+                email_sent = self.alert_manager.send_emergency_alert(
+                    source="dashboard",
+                    details=message,
+                )
+                if not email_sent:
+                    email_error = "AlertManager.send_emergency_alert returned False"
+            except Exception as exc:
+                email_error = str(exc)
+                logger.error("Dashboard emergency email send failed: %s", exc)
+
+        ok = bool(alert_id) and email_sent
         return {
-            "ok": bool(alert_id),
+            "ok": ok,
             "alert_id": alert_id,
             "message": message,
+            "db_logged": bool(alert_id),
+            "email_sent": email_sent,
+            "email_error": email_error,
         }
 
 
@@ -262,6 +310,8 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             return self._serve_static("styles.css", "text/css; charset=utf-8")
         if parsed.path == "/app.js":
             return self._serve_static("app.js", "application/javascript; charset=utf-8")
+        if parsed.path == "/camera-stream":
+            return self._serve_camera_stream()
         if parsed.path == "/camera-frame":
             return self._serve_camera_frame()
 
@@ -337,6 +387,53 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_camera_stream(self) -> None:
+        """Serve a live MJPEG stream sourced from the latest captured frame file."""
+        if not LATEST_CAMERA_FRAME_PATH.exists():
+            self.send_error(HTTPStatus.NOT_FOUND, "Camera stream not available")
+            return
+
+        boundary = "frame"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", f"multipart/x-mixed-replace; boundary={boundary}")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+
+        last_good_frame: bytes | None = None
+        try:
+            while True:
+                if not LATEST_CAMERA_FRAME_PATH.exists():
+                    time.sleep(0.1)
+                    continue
+
+                frame = LATEST_CAMERA_FRAME_PATH.read_bytes()
+                if not frame:
+                    time.sleep(0.05)
+                    continue
+
+                # Ignore partial/corrupt reads while file is being updated.
+                if not (frame.startswith(b"\xff\xd8") and frame.endswith(b"\xff\xd9")):
+                    if last_good_frame is None:
+                        time.sleep(0.02)
+                        continue
+                    frame = last_good_frame
+                else:
+                    last_good_frame = frame
+
+                self.wfile.write(f"--{boundary}\r\n".encode("utf-8"))
+                self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                self.wfile.write(f"Content-Length: {len(frame)}\r\n\r\n".encode("utf-8"))
+                self.wfile.write(frame)
+                self.wfile.write(b"\r\n")
+                self.wfile.flush()
+
+                # ~12 FPS is enough for dashboard preview and keeps CPU/network moderate.
+                time.sleep(0.08)
+        except (BrokenPipeError, ConnectionResetError):
+            logger.debug("Camera stream client disconnected")
+        except Exception as exc:
+            logger.error("Error in camera stream: %s", exc)
+
     def _send_json(self, payload: Dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -354,14 +451,25 @@ def _safe_int(value: str, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, parsed))
 
 
-def run_dashboard_server(host: str = "0.0.0.0", port: int = 8080) -> None:
+def run_dashboard_server(host: str = "0.0.0.0", port: int = 8081) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     service = DashboardService()
     DashboardRequestHandler.service = service
 
-    server = ThreadingHTTPServer((host, port), DashboardRequestHandler)
-    logger.info("Dashboard server running at http://%s:%s", host, port)
+    selected_port = port
+    try:
+        server = ThreadingHTTPServer((host, selected_port), DashboardRequestHandler)
+    except OSError as exc:
+        logger.warning(
+            "Port %s is unavailable (%s). Falling back to a free port.",
+            selected_port,
+            exc,
+        )
+        server = ThreadingHTTPServer((host, 0), DashboardRequestHandler)
+
+    actual_port = int(server.server_address[1])
+    logger.info("Dashboard server running at http://%s:%s", host, actual_port)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -372,4 +480,4 @@ def run_dashboard_server(host: str = "0.0.0.0", port: int = 8080) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    run_dashboard_server()

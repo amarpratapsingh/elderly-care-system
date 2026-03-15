@@ -46,9 +46,15 @@ async function fetchJson(url, options = undefined) {
 
 
 
-function refreshCameraFrame() {
-  const ts = Date.now();
-  els.cameraFrame.src = `/camera-frame?t=${ts}`;
+function refreshCameraFrame(cameraUrl) {
+  if (!cameraUrl) {
+    els.cameraFrame.removeAttribute('src');
+    return;
+  }
+
+  if (els.cameraFrame.src !== cameraUrl) {
+    els.cameraFrame.src = cameraUrl;
+  }
 }
 
 async function loadCameraStatus() {
@@ -57,7 +63,7 @@ async function loadCameraStatus() {
     if (camera.available) {
       els.cameraStatus.textContent = `Camera active · updated ${formatText(camera.updated_at)}`;
       els.cameraFrame.style.display = 'block';
-      refreshCameraFrame();
+      refreshCameraFrame(camera.url || '/camera-stream');
     } else {
       els.cameraStatus.textContent = 'No camera frame yet. Start main.py to stream frames.';
       els.cameraFrame.style.display = 'none';
@@ -116,10 +122,13 @@ async function triggerEmergency() {
   try {
     const payload = await fetchJson('/api/emergency', { method: 'POST' });
     if (payload.ok) {
-      els.emergencyResult.textContent = `Emergency logged (ID: ${payload.alert_id}).`;
+      els.emergencyResult.textContent = `Emergency logged (ID: ${payload.alert_id}) and email sent.`;
       await loadDashboard();
     } else {
-      els.emergencyResult.textContent = 'Failed to log emergency alert.';
+      const dbStatus = payload.db_logged ? 'DB logged' : 'DB not logged';
+      const emailStatus = payload.email_sent ? 'email sent' : `email failed (${formatText(payload.email_error)})`;
+      els.emergencyResult.textContent = `Emergency partially handled: ${dbStatus}, ${emailStatus}.`;
+      await loadDashboard();
     }
   } catch (error) {
     els.emergencyResult.textContent = `Emergency request failed: ${error.message}`;

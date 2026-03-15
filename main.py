@@ -3,6 +3,7 @@ Main application entry point for the elderly care monitoring system.
 """
 
 import logging
+import os
 import queue
 import signal
 import sqlite3
@@ -81,6 +82,7 @@ class ElderlyCareSystem:
         self._db_fallback_file = Path("logs/database_fallback.log")
         self._camera_available = True
         self._latest_frame_path = Path("data/latest_camera_frame.jpg")
+        self._latest_frame_tmp_path = Path("data/latest_camera_frame.tmp.jpg")
         self._voice_available = True
         self._offline_stt_mode = False
         self._stt_none_count = 0
@@ -639,7 +641,10 @@ class ElderlyCareSystem:
                 continue
 
             try:
-                cv2.imwrite(str(self._latest_frame_path), current_frame)
+                ok, encoded = cv2.imencode(".jpg", current_frame)
+                if ok:
+                    self._latest_frame_tmp_path.write_bytes(encoded.tobytes())
+                    os.replace(self._latest_frame_tmp_path, self._latest_frame_path)
             except Exception as e:
                 logger.debug("Failed to update latest camera frame: %s", e)
 
